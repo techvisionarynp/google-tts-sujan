@@ -1,2 +1,30 @@
-import express from 'express' import gtts from 'google-tts-api' const app = express() const PORT = process.env.PORT || 3000 function splitTextByLength(text, maxLen = 200) { const parts = [] let start = 0 while (start < text.length) { let end = Math.min(start + maxLen, text.length) if (end < text.length) { let lastSpace = text.lastIndexOf(' ', end) if (lastSpace > start) end = lastSpace } parts.push(text.slice(start, end)) start = end while (text[start] === ' ' && start < text.length) start++ } return parts } async function fetchAudioBuffer(url) { const res = await fetch(url) if (!res.ok) throw new Error(Failed to fetch audio: ${res.status}) const ab = await res.arrayBuffer() return Buffer.from(ab) } app.get('/api/tts', async (req, res) => { try { const text = (req.query.text || '').toString().trim() const lang = (req.query.lang || 'en').toString() const slow = (req.query.slow || 'false').toString().toLowerCase() === 'true' if (!text) return res.status(400).json({ error: 'Missing required parameter: text' }) const parts = splitTextByLength(text, 200) const buffers = [] for (const part of parts) { const url = gtts.getAudioUrl(part, { lang, slow, host: 'https://translate.google.com' }) const buf = await fetchAudioBuffer(url) buffers.push(buf) } const combined = Buffer.concat(buffers) const base64 = combined.toString('base64') res.setHeader('Content-Type', 'application/json') res.status(200).json({ audio: base64, contentType: 'audio/mpeg', bytes: combined.length }) } catch (err) { res.status(500).json({ error: err.message || 'Internal Server Error' }) } }) app.listen(PORT)
+import express from 'express';
+import * as googleTTS from 'google-tts-api';
+import fetch from 'node-fetch';
 
+const app = express();
+
+app.get('/', async (req, res) => {
+  try {
+    const text = (req.query.text || '').toString().trim();
+    const lang = (req.query.lang || 'en').toString();
+    const slow = (req.query.slow || 'false').toString().toLowerCase() === 'true';
+    if (!text) return res.status(400).json({ error: 'Missing required parameter: text' });
+    const audioSegments = googleTTS.getAllAudioUrls(text, { lang, slow, host: 'https://translate.google.com', splitPunct: ',.?!' });
+    const buffers = [];
+    for (const segment of audioSegments) {
+      const audioRes = await fetch(segment.url);
+      if (!audioRes.ok) throw new Error(`Failed to fetch audio: ${audioRes.status}`);
+      const arrayBuffer = await audioRes.arrayBuffer();
+      buffers.push(Buffer.from(arrayBuffer));
+    }
+    const combinedBuffer = Buffer.concat(buffers);
+    const base64Audio = combinedBuffer.toString('base64');
+    res.setHeader('Content-Type', 'application/json');
+    res.status(200).json({ audio: base64Audio, contentType: 'audio/mpeg', bytes: combinedBuffer.length });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Internal Server Error' });
+  }
+});
+
+export default app;
