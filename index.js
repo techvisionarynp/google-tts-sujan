@@ -2,12 +2,14 @@ import express from 'express';
 import * as googleTTS from 'google-tts-api';
 
 const app = express();
+app.use(express.json());
 
-app.get('/api/generate', async (req, res) => {
+const generateAudioHandler = async (req, res) => {
   try {
-    const text = (req.query.text || '').toString().trim();
-    const lang = (req.query.lang || 'en').toString();
-    const slow = (req.query.slow || 'false').toString().toLowerCase() === 'true';
+    const params = { ...req.query, ...req.body };
+    const text = (params.text || '').toString().trim();
+    const lang = (params.lang || 'en').toString();
+    const slow = (params.slow || 'false').toString().toLowerCase() === 'true';
 
     if (!text) {
       return res.status(400).json({ error: 'Missing required parameter: text' });
@@ -32,6 +34,14 @@ app.get('/api/generate', async (req, res) => {
     const errorMessage = err instanceof Error ? err.message : 'Internal Server Error';
     res.status(500).json({ error: errorMessage });
   }
+};
+
+app.get('/', (req, res) => {
+  res.status(200).json({ message: 'TTS API is running. Use /api/generate endpoint.' });
 });
+
+app.route('/api/generate')
+  .get(generateAudioHandler)
+  .post(generateAudioHandler);
 
 export default app;
