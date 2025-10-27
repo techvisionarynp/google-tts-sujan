@@ -1,7 +1,6 @@
 from fastapi import FastAPI
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from gtts import gTTS
-import base64
 from io import BytesIO
 
 app = FastAPI()
@@ -10,7 +9,8 @@ app = FastAPI()
 async def root():
     return JSONResponse(
         content={
-            "message": "API running... use /v1/convert."
+            "message": "API running... use /v1/convert.",
+            "developer": "Blind tech visionary"
         }
     )
 
@@ -24,23 +24,14 @@ async def convert(text: str = None, lang: str = None):
             },
             status_code=400
         )
-    
     try:
         tts = gTTS(text=text, lang=lang)
         audio_buffer = BytesIO()
         tts.write_to_fp(audio_buffer)
         audio_buffer.seek(0)
-        audio_bytes = audio_buffer.read()
-        audio_base64 = base64.b64encode(audio_bytes).decode('utf-8')
-        
-        return JSONResponse(
-            content={
-                "developer": "Blind tech visionary",
-                "audio": audio_base64
-            },
-            status_code=200
-        )
-        
+        return StreamingResponse(audio_buffer, media_type="audio/mpeg", headers={
+            "Content-Disposition": "inline; filename=output.mp3"
+        })
     except Exception as e:
         return JSONResponse(
             content={
